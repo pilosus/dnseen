@@ -1,0 +1,11 @@
+[Unit]
+Description=dnseen collects DNS queries logs using tcpdump tool
+After=network.target
+
+[Service]
+ExecStart=/bin/bash -lc '/usr/sbin/tcpdump -i any -l -tttt -x "port 53" 2>/dev/null | grep --line-buffered " A? " | stdbuf -oL cut -d" " -f1,2,12'
+StandardOutput=append:/var/log/dnseen.log
+StandardError=append:/var/log/dnseen.log
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,10 @@
+# logrotate config
+# /etc/logrotate.d/dnseen
+/var/log/dnseen.log {
+    missingok
+    notifempty
+    rotate 4
+    monthly
+    create
+    compress
+}
