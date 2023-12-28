@@ -1,0 +1,182 @@
+#!/usr/bin/env bb
+
+(ns dnseen
+  (:require
+   [clojure.string :as str]
+   [clojure.pprint :as p]
+   [babashka.cli :as cli]))
+
+;; CLI opts parsing helpers
+
+(defn str->dt [s] (java.time.LocalDateTime/parse s))
+(defn str->regex [s] (re-pattern s))
+
+;; Const
+
+(def logfile "/var/log/dnseen.log")
+(def epoch "1970-01-01T00:00:00")
+
+(def cli-spec 
+  {:from {:desc "Start timestamp (inclusive) in ISO-8601 LocalDateTime format to filter logs. Defaults to the first log entry's timestamp. Example: '1970-01-01T00:00:00'"
+          :alias :f
+          :default nil 
+          :coerce str->dt}
+   :to {:desc "End timestamp (inclusive) in ISO-8601 LocalDateTime format to filter logs. Defaults to the last log entry's timestamp. Example: '2023-12-31T23:59:59.999'"
+        :alias :t
+        :default nil 
+        :coerce str->dt}
+   :exclude {:desc "Perl-compatible regular expression to exclude domain names from the logs. Example: '(?i).*(dnsleaktest|firefox|fedoraproject)'"
+             :alias :e
+             :default nil
+             :coerce str->regex}
+   :hits {:desc "Output domains with the given number of hits or above"
+          :default nil
+          :coerce :int}
+   :head {:desc "Output the first N domains. Applied as the last filter to the report"
+          :default nil
+          :coerce :int}
+   :help {:desc "Print help message"
+          :alias :h
+          :coerce :boolean}})
+
+;; Process logs
+
+(defn split-cols 
+  [s]
+  (str/split s #"\s+"))
+
+(defn valid-domain?
+  "Return true if a domain name ends with a dot char"
+  [[_ _ domain]]
+  (str/ends-with? domain "."))
+
+(defn parse-log-entry
+  "Convert timestamps to LocalDateTime, prettify domain names"
+  [[date time url]]
+  (let [dt (java.time.LocalDateTime/parse (str date "T" time))
+        domain (subs url 0 (dec (count url)))]
+    [dt domain]))
+
+(defn dt-in-range?
+  "Return true if the given timestamp is in the range [from, to]"
+  [from to [dt _]]
+  (and 
+   (or (.isAfter dt from) (.isEqual dt from))
+   (or (.isBefore dt to) (.isEqual dt to))))
+
+(defn parse-logs
+  "Parse logfile into a sequence of [timestamp domain] vectors"
+  []
+  (->> logfile
+       slurp
+       str/split-lines
+       (map split-cols)
+       (filter valid-domain?)
+       (map parse-log-entry)))
+
+(defn- logs-dt-range
+  "Return a start and an end timestamps of the given logs seq"
+  [logs]
+  (let [start (->> logs first first)
+        end (->> logs last first)]
+    {:start start :end end}))
+
+(defn opts-with-defaults
+  "Update opts with sensible defaults"
+  [opts logs]
+  (let [{:keys [start end]} (logs-dt-range logs)
+        {:keys [from to head hits]} opts]
+    (assoc 
+     opts 
+     :from (or from start) 
+     :to (or to end)
+     :head (or head (count logs))
+     :hits (or hits 0))))
+
+(defn filter-logs
+  "Apply filters to the logs before aggregating"
+  [opts logs]
+  (let [{:keys [from to exclude]} opts]
+    
+    (->> logs
+         (filter (partial dt-in-range? from to))
+         (remove (fn [[_ domain]] (if exclude (re-find exclude domain) false))))))
+
+;; Stats
+
+(defn filter-stats
+  "Apply filters to the aggregated stats seq of [domain hits] vectors"
+  [opts stats]
+  (->> stats
+       (filter (fn [[_ hits]] (>= hits (:hits opts))))
+       (take (:head opts))))
+
+(defn stats-report
+  "Return a start report with a top-list of domain hits in desc order"
+  [opts]
+  (let [logs (parse-logs)
+        opts (opts-with-defaults opts logs)]
+    {:stats (->> logs
+                 (filter-logs opts)
+                 (map second)
+                 frequencies
+                 (sort-by second)
+                 reverse
+                 (filter-stats opts)
+                 (into []))
+     :opts opts}))
+
+;; Representation
+
+(defn opts->str
+  "Format non-nil opts as strings"
+  [opts]
+  (let [opts (->> 
+              opts
+              (remove (fn [[_ v]] (nil? v)))
+              (map (fn [[k v]] [k (str v)]))
+              (into {}))]
+     opts))
+
+(defn out-opts!
+  "Print query options used"
+  [opts]
+  (let [query (opts->str opts)]
+    (println "Query options:")
+    (p/pprint query)))
+
+(defn out-report!
+  "Print stats report to the standard output" 
+  [stats]
+  (let [{:keys [stats opts]} stats
+        report (->> stats
+                    (reduce 
+                     (fn [acc [domain hits]] 
+                       (conj acc {:domain domain :hits hits})) []))]
+    (p/print-table report)
+    (out-opts! opts)))
+
+;; CLI options
+
+(defn cli->opts
+  "Parse CLI options"
+  []
+  (cli/parse-opts *command-line-args* {:spec cli-spec}))
+
+(defn out-help!
+  "Print help message"
+  []
+  (println (cli/format-opts {:spec cli-spec})))
+
+;; Entrypoint
+
+(defn exec!
+  "Entrypoint"
+  []
+  (let [opts (cli->opts)]
+    (if (:help opts)
+      (out-help!)
+      (out-report! (stats-report opts)))))
+
+(when (= *file* (System/getProperty "babashka.file"))
+  (exec!))
