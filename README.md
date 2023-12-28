@@ -23,7 +23,7 @@ cd dnseen
 
 - `tcpdump`
 - [babashka](https://github.com/babashka/babashka#installation)
-- (otionally) `logrotate`
+- (optionally) `logrotate`
 
 3. Copy content of the `dnseen.service` file and paste to a new
    `systemd` service:
