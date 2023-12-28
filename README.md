@@ -10,6 +10,27 @@
 - Filtering: select a datetime range, filter out domains with regex,
   filter by domain hits, etc.
 
+```
+|                             :domain | :hits |
+|-------------------------------------+-------|
+|                      api.github.com |     3 |
+|          encrypted-tbn0.gstatic.com |     2 |
+|                   fedoraproject.org |     2 |
+|                      www.google.com |     2 |
+|                     ssl.gstatic.com |     2 |
+|        profile.accounts.firefox.com |     2 |
+|                       ocsp.pki.goog |     2 |
+|           lh5.googleusercontent.com |     2 |
+| optimizationguide-pa.googleapis.com |     2 |
+|         safebrowsing.googleapis.com |     2 |
+Query options:
+{:exclude "(?i).*(dnsleaktest|archive\\.is)",
+ :head "10",
+ :from "2023-12-28T18:40",
+ :to "2023-12-28T18:50",
+ :hits "2"}
+```
+
 ## Install
 
 1. Clone the repo and `cd` to it:
@@ -60,10 +81,11 @@ Make sure config is valid:
 sudo logrotate --debug /etc/logrotate.d/dnseen
 ```
 
-If needed, force rotation:
+If needed, force rotation and restart the service:
 
 ```shell
 sudo logrotate --force /etc/logrotate.d/dnseen
+sudo systemctl restart dnseen.service
 ```
 
 ## Use
