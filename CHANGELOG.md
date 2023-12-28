@@ -15,5 +15,5 @@ Nothing here yet.
 - `systemd` service file
 - `logrotate` config file
 
-[Unreleased]: https://github.com/pilosus/kairos/compare/v0.1.0...HEAD
-[v0.1.0]: https://github.com/pilosus/kairos/compare/v0.0.0...v0.1.0
+[Unreleased]: https://github.com/pilosus/dnseen/compare/v0.1.0...HEAD
+[v0.1.0]: https://github.com/pilosus/dnseen/compare/v0.0.0...v0.1.0
