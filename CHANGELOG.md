@@ -8,6 +8,12 @@ file. This change log follows the conventions of
 
 Nothing here yet.
 
+## [v0.2.1] - 2023-12-29
+### Fixed
+- Installer script's `--uninstall` option can be invoked in any order
+  along with other CLI options
+- Installer script's wording improved
+
 ## [v0.2.0] - 2023-12-29
 ### Added
 - Installer script to automate installation process
@@ -33,6 +39,7 @@ Nothing here yet.
 - `systemd` service file
 - `logrotate` config file
 
-[Unreleased]: https://github.com/pilosus/dnseen/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/pilosus/dnseen/compare/v0.2.1...HEAD
+[v0.2.1]: https://github.com/pilosus/dnseen/compare/v0.2.0...v0.2.1
 [v0.2.0]: https://github.com/pilosus/dnseen/compare/v0.1.0...v0.2.0
 [v0.1.0]: https://github.com/pilosus/dnseen/compare/v0.0.0...v0.1.0

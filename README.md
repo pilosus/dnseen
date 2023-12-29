@@ -73,8 +73,7 @@ directory under `/tmp`, you can change it with the option
 ```
 
 You can uninstall `dnseen` and all its corresponding services with the
-`--uninstall` option (can be used along with `--install-dir`, which
-should come first, before `--uninstall`):
+`--uninstall` option (can be used along with `--install-dir`):
 
 ```shell
 ./install --uninstall

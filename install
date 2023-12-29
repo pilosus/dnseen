@@ -27,6 +27,8 @@ dnseen_cmd="dnseen"
 unarchive_cmd="$(which tar) -xzf"
 checksum_cmd="$(which sha256sum)"
 
+remove=false
+
 # Help
 
 show_help() {
@@ -48,25 +50,25 @@ show_help() {
 
 uninstall() {
   if [ -f "${systemd_dir}/${dnseen_cmd}.service" ]; then
-    echo "Stopping and disabling systemd ${dnseen_cmd}.service"
     systemctl stop "${dnseen_cmd}.service"
     systemctl disable "${dnseen_cmd}.service"
+    echo "Stopped and disabled systemd ${dnseen_cmd}.service"
 
-    echo "Removing file ${systemd_dir}/${dnseen_cmd}.service"
     rm -f "${systemd_dir}/${dnseen_cmd}.service"
+    echo "Removed ${systemd_dir}/${dnseen_cmd}.service"
 
-    echo "Restarting systemd daemon"
     systemctl daemon-reload
+    echo "Restarted systemd daemon"
   fi
 
   if [ -f "${logrotate_dir}/${dnseen_cmd}.logrotate" ]; then
-    echo "Removing ${logrotate_dir}/${dnseen_cmd}.logrotate"
     rm -f "${logrotate_dir}/${dnseen_cmd}.logrotate"
+    echo "Removed ${logrotate_dir}/${dnseen_cmd}.logrotate"
   fi
 
   if [ -f "${install_dir}/${dnseen_cmd}" ]; then
-    echo "Removing ${install_dir}/${dnseen_cmd}"
     rm -f "${install_dir}/${dnseen_cmd}"
+    echo "Removed ${install_dir}/${dnseen_cmd}"
   fi
 
   echo "Uninstall complete"
@@ -100,8 +102,7 @@ do
       shift
       ;;
     --uninstall)
-      uninstall
-      shift
+      remove=true
       shift
       ;;
     *)
@@ -111,15 +112,20 @@ do
   esac
 done
 
+# We want to parse all the CLI opts in whatever order they are given
+# before invoking uninstall function
+if [[ "$remove" == true ]] ; then
+  uninstall
+fi
 
 # CLI opts set up & validation
 
 if ! command -v tcpdump >/dev/null; then
-  echo "tcpdump not found. Install before proceeding with the ${dnseen_cmd} installation"
+  echo "tcpdump not found. Install it before proceeding with the ${dnseen_cmd} installation"
   echo "See your distribution's documentation for the proper command to install `tcpdump` package"
   exit 1
 elif ! command -v bb >/dev/null; then
-  echo "babashka not found. Install before proceeding with the ${dnseen_cmd} installation"
+  echo "babashka not found. Install it before proceeding with the ${dnseen_cmd} installation"
   echo "See installation guide for babashka:"
   echo "https://github.com/babashka/babashka#installation"
   exit 1
@@ -149,9 +155,8 @@ download_url="https://github.com/pilosus/dnseen/archive/refs/tags/${filename}"
 
 mkdir -p "$download_dir" && (
   cd "$download_dir"
-  echo -e "Downloading $download_url to $download_dir"
-
   curl -o "$filename" -sL "$download_url"
+  echo -e "Downloaded ${download_url} to ${download_dir}"
   if [[ -n "$checksum" ]]; then
     if ! echo "$checksum *$filename" | $checksum_cmd --check --status; then
       >&2 echo "Failed checksum on $filename"
@@ -170,21 +175,22 @@ if [[ "$download_dir" != "$install_dir" ]]
 then
   mkdir -p "$install_dir"
   if [ -f "${install_dir}/${dnseen_cmd}" ]; then
-    echo "Moving ${install_dir}/${dnseen_cmd} to ${install_dir}/${dnseen_cmd}.old"
     mv -f "${install_dir}/${dnseen_cmd}" "${install_dir}/${dnseen_cmd}.old"
+    echo "Moved ${install_dir}/${dnseen_cmd} to ${install_dir}/${dnseen_cmd}.old"
   fi
   mv -f "${download_dir}/${extracted_dir}/${dnseen_cmd}" "${install_dir}/${dnseen_cmd}"
 fi
-echo "Successfully installed ${dnseen_cmd} in ${install_dir}"
+echo "Installed ${dnseen_cmd} in ${install_dir}"
 
 # Install systemd service
 
 if [ -f "${systemd_dir}/${dnseen_cmd}.service" ]; then
-  echo "Stopping and disabling systemd ${dnseen_cmd}.service"
   systemctl stop "${dnseen_cmd}.service"
   systemctl disable "${dnseen_cmd}.service"
-  echo "Moving ${systemd_dir}/${dnseen_cmd}.service to ${systemd_dir}/${dnseen_cmd}.service.old"
+  echo "Stopped and disabled ${dnseen_cmd}.service temporarily"
+
   mv -f "${systemd_dir}/${dnseen_cmd}.service" "${systemd_dir}/${dnseen_cmd}.service.old"
+  echo "Moved ${systemd_dir}/${dnseen_cmd}.service to ${systemd_dir}/${dnseen_cmd}.service.old"
 fi
 
 mv -f "${download_dir}/${extracted_dir}/${dnseen_cmd}.service" "${systemd_dir}/${dnseen_cmd}.service"
@@ -194,18 +200,17 @@ restorecon "${systemd_dir}/${dnseen_cmd}.service"
 systemctl daemon-reload
 systemctl start "${dnseen_cmd}.service"
 systemctl enable "${dnseen_cmd}.service"
-echo "Successfully enabled and started ${systemd_dir}/${dnseen_cmd}.service"
+echo "Enabled and started systemd ${dnseen_cmd}.service"
         
 # Install logrotate
 # Logrotate is optional, add config only if the command is available
 
 if command -v logrotate >/dev/null; then
   mv -f "${download_dir}/${extracted_dir}/${dnseen_cmd}.logrotate" "${logrotate_dir}/${dnseen_cmd}.logrotate"
-  echo "Successfully added ${logrotate_dir}/${dnseen_cmd}.logrotate"
+  echo "Added config ${logrotate_dir}/${dnseen_cmd}.logrotate"
 else
   echo "logrotate not found, skip adding logrotate config"
 fi
 
 echo "Install complete"
 exit 0
-
