@@ -12,18 +12,19 @@
 
 ```
 $ dnseen
-|                             :domain | :hits |
-|-------------------------------------+-------|
-|                      api.github.com |     3 |
-|          encrypted-tbn0.gstatic.com |     2 |
-|                   fedoraproject.org |     2 |
-|                      www.google.com |     2 |
-|                     ssl.gstatic.com |     2 |
-|        profile.accounts.firefox.com |     2 |
-|                       ocsp.pki.goog |     2 |
-|           lh5.googleusercontent.com |     2 |
-| optimizationguide-pa.googleapis.com |     2 |
-|         safebrowsing.googleapis.com |     2 |
+|                                     :domain | :hits |
+|---------------------------------------------+-------|
+|                                  github.com |    87 |
+|                              api.github.com |    83 |
+|                           fedoraproject.org |    80 |
+|                profile.accounts.firefox.com |    60 |
+|                 safebrowsing.googleapis.com |    37 |
+|                        collector.github.com |    36 |
+|                            alive.github.com |    32 |
+|                contile.services.mozilla.com |    27 |
+| sync-1-us-west1-g.sync.services.mozilla.com |    22 |
+|                               ocsp.pki.goog |    21 |
+...
 ```
 
 ## Install
@@ -158,9 +159,13 @@ Apply some filters if needed:
 ```shell
 dnseen \
     --from "2023-12-01T00:00:00" \
-    --to "2023-12-08T00:00:00" \
-    --exclude '(?i).*dnsleaktest' \
-    --hits 10
+    --to "2024-01-01T00:00:00" \
+    --match '\.(goog|google)$' \
+    --exclude '(?i).*domains\.' \
+    --hits 10 \
+    --head 20 \
+    --no-pretty \
+    -vvv
 ```
 
 Find more options in help:
