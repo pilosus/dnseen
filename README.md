@@ -33,6 +33,16 @@ Query options:
 
 ## Install
 
+### Installer script
+
+```shell
+curl -sLO https://raw.githubusercontent.com/pilosus/dnseen/master/install
+chmod +x install
+sudo ./install
+```
+
+### Manual install
+
 1. Clone the repo and `cd` to it:
 
 ```shell

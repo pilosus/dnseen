@@ -8,6 +8,10 @@ file. This change log follows the conventions of
 
 Nothing here yet.
 
+### Added
+- Installer script to automate installation process
+  ([#1](https://github.com/pilosus/dnseen/issues/1))
+
 ## [v0.1.0] - 2023-12-28
 ### Added
 - `dnseen` analyzer with filtering by date range, domain exclude
