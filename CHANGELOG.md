@@ -8,6 +8,7 @@ file. This change log follows the conventions of
 
 Nothing here yet.
 
+## [v0.2.0] - 2023-12-29
 ### Added
 - Installer script to automate installation process
   ([#1](https://github.com/pilosus/dnseen/issues/1))
@@ -17,6 +18,9 @@ Nothing here yet.
 - `--verbose` (or `-v`) option added. Multiple flags combine into the
   total verbosity level
   ([#7](https://github.com/pilosus/dnseen/issues/7))
+- `--pretty` flag (default) prints a report in tabular format;
+  `--no-pretty` flag prints a report in plain text format
+  ([#8](https://github.com/pilosus/dnseen/issues/8))
 
 ### Changed
 - Query options section under the stats report is hidden by default,
@@ -29,5 +33,6 @@ Nothing here yet.
 - `systemd` service file
 - `logrotate` config file
 
-[Unreleased]: https://github.com/pilosus/dnseen/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/pilosus/dnseen/compare/v0.2.0...HEAD
+[v0.2.0]: https://github.com/pilosus/dnseen/compare/v0.1.0...v0.2.0
 [v0.1.0]: https://github.com/pilosus/dnseen/compare/v0.0.0...v0.1.0
