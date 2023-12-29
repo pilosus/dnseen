@@ -136,7 +136,7 @@
                    (filter-stats opts)
                    (into []))]
     {:stats stats
-     :opts (assoc opts :filtered (count stats))}))
+     :opts opts}))
 
 ;; Representation
 
