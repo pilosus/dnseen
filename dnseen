@@ -38,6 +38,9 @@
    :head {:desc "Output the first N domains. Applied as the last filter to the report"
           :default nil
           :coerce :int}
+   :verbose {:desc "Verbosity. Multiple flags combine"
+             :alias :v
+             :coerce []}
    :help {:desc "Print help message"
           :alias :h
           :coerce :boolean}})
@@ -147,9 +150,11 @@
 (defn out-opts!
   "Print query options used"
   [opts]
-  (let [query (opts->str opts)]
-    (println "Query options:")
-    (p/pprint query)))
+  (let [query (opts->str opts)
+        verbosity (count (:verbose opts))]
+    (when (>= verbosity 1)
+      (println "Query params:")
+      (p/pprint query))))
 
 (defn out-report!
   "Print stats report to the standard output" 
