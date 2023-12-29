@@ -15,7 +15,7 @@
 
 (def logfile "/var/log/dnseen.log")
 
-(def cli-spec 
+(def cli-spec
   {:from {:desc "Start timestamp (inclusive) in ISO-8601 LocalDateTime format to filter logs. Defaults to the first log entry's timestamp. Example: '1970-01-01T00:00:00'"
           :alias :f
           :default nil 
@@ -24,6 +24,10 @@
         :alias :t
         :default nil 
         :coerce str->dt}
+   :match {:desc "Perl-compatible regular expression to match domain names from the logs. Example: '(google|goog)$'"
+           :alias :m
+           :default nil
+           :coerce str->regex}
    :exclude {:desc "Perl-compatible regular expression to exclude domain names from the logs. Example: '(?i).*(dnsleaktest|firefox|fedoraproject)'"
              :alias :e
              :default nil
@@ -37,6 +41,8 @@
    :help {:desc "Print help message"
           :alias :h
           :coerce :boolean}})
+
+(def opts-ordered [:from :to :match :exclude :hits :head :help])
 
 ;; Process logs
 
@@ -80,25 +86,27 @@
         end (->> logs last first)]
     {:start start :end end}))
 
-(defn opts-with-defaults
+(defn enrich-opts
   "Update opts with sensible defaults"
   [opts logs]
   (let [{:keys [start end]} (logs-dt-range logs)
-        {:keys [from to head hits]} opts]
+        {:keys [from to head hits]} opts
+        logs-total (count logs)]
     (assoc 
      opts 
      :from (or from start) 
      :to (or to end)
-     :head (or head (count logs))
-     :hits (or hits 0))))
+     :head (or head logs-total)
+     :hits (or hits 0)
+     :total logs-total)))
 
 (defn filter-logs
   "Apply filters to the logs before aggregating"
   [opts logs]
-  (let [{:keys [from to exclude]} opts]
-    
+  (let [{:keys [from to exclude match]} opts]
     (->> logs
          (filter (partial dt-in-range? from to))
+         (filter (fn [[_ domain]] (if match (re-find match domain) true)))
          (remove (fn [[_ domain]] (if exclude (re-find exclude domain) false))))))
 
 ;; Stats
@@ -112,18 +120,17 @@
 
 (defn stats-report
   "Return a start report with a top-list of domain hits in desc order"
-  [opts]
-  (let [logs (parse-logs)
-        opts (opts-with-defaults opts logs)]
-    {:stats (->> logs
-                 (filter-logs opts)
-                 (map second)
-                 frequencies
-                 (sort-by second)
-                 reverse
-                 (filter-stats opts)
-                 (into []))
-     :opts opts}))
+  [opts logs]
+  (let [stats (->> logs
+                   (filter-logs opts)
+                   (map second)
+                   frequencies
+                   (sort-by second)
+                   reverse
+                   (filter-stats opts)
+                   (into []))]
+    {:stats stats
+     :opts (assoc opts :filtered (count stats))}))
 
 ;; Representation
 
@@ -165,7 +172,7 @@
 (defn out-help!
   "Print help message"
   []
-  (println (cli/format-opts {:spec cli-spec})))
+  (println (cli/format-opts {:spec cli-spec :order opts-ordered})))
 
 ;; Entrypoint
 
@@ -175,7 +182,10 @@
   (let [opts (cli->opts)]
     (if (:help opts)
       (out-help!)
-      (out-report! (stats-report opts)))))
+      (let [logs (parse-logs)
+            opts (enrich-opts opts logs)]
+        (out-report! (->> logs
+                          (stats-report opts)))))))
 
 (when (= *file* (System/getProperty "babashka.file"))
   (exec!))

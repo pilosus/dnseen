@@ -143,13 +143,20 @@ filters applied, domains ordered by number of hits in descending
 order:
 
 ```shell
+dnseen
+```
+
+when invoking command that is not under your `$PATH` (e.g. if you
+followed the manual installation guide), use:
+
+```shell
 ./dnseen
 ```
 
 Apply some filters if needed:
 
 ```shell
-./dnseen \
+dnseen \
     --from "2023-12-01T00:00:00" \
     --to "2023-12-08T00:00:00" \
     --exclude '(?i).*dnsleaktest' \
@@ -159,5 +166,9 @@ Apply some filters if needed:
 Find more options in help:
 
 ```shell
-./dnseen --help
+dnseen --help
 ```
+
+Filters are applied to the raw logs in the order the corresponding CLI
+options are shown in the help message (e.g. `--match` is applied
+before `--exclude`).

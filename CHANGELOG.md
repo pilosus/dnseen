@@ -11,6 +11,9 @@ Nothing here yet.
 ### Added
 - Installer script to automate installation process
   ([#1](https://github.com/pilosus/dnseen/issues/1))
+- `--match` option for a Perl-compatible regular expression to filter
+  matching domain names
+  ([#3](https://github.com/pilosus/dnseen/issues/3))
 
 ## [v0.1.0] - 2023-12-28
 ### Added
