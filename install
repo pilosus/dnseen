@@ -8,11 +8,13 @@ set -euo pipefail
 
 # Init vars
 
-version=$( curl -sSL \
-                -H "Accept: application/vnd.github+json" \
-                -H "X-GitHub-Api-Version: 2022-11-28"  \
-                https://api.github.com/repos/pilosus/dnseen/releases/latest | \
-             grep tag_name | sed  -r 's/.*"v(.*)".*/\1/' )
+version_default=$( curl \
+                     -sSL \
+                     -H "Accept: application/vnd.github+json" \
+                     -H "X-GitHub-Api-Version: 2022-11-28"  \
+                     https://api.github.com/repos/pilosus/dnseen/releases/latest | \
+                     grep tag_name | sed  -r 's/.*"v(.*)".*/\1/' )
+version="$version_default"
 checksum=""
 
 install_dir_default="/usr/local/bin"
@@ -28,75 +30,114 @@ checksum_cmd="$(which sha256sum)"
 # Help
 
 show_help() {
-    echo "${dnseen_cmd} installation script"
-    echo -e
-    echo "Usage:"
-    echo "./install [options]"
-    echo -e
-    echo "Options:"
-    echo " --install-dir <directory path>: directory ${dnseen_cmd} will be installed to. Default: ${install_dir_default}"
-    echo "--download-dir <directory path>: directory files will be downloaded to. Default: temporary"
-    echo "--version <version>: release version. Default: latest on GitHub"
-    echo "--checksum <checksum>: checksum to verify downloaded files"
-    exit 1
+  echo "${dnseen_cmd} installation script"
+  echo -e
+  echo "Usage:"
+  echo "./install [options]"
+  echo -e
+  echo "Options:"
+  echo "--install-dir <directory path>: directory ${dnseen_cmd} will be installed to. Default: ${install_dir_default}"
+  echo "--download-dir <directory path>: directory files will be downloaded to. Default: temporary"
+  echo "--version <version>: release version. Default: latest on GitHub"
+  echo "--checksum <checksum>: checksum to verify downloaded files"
+  echo "--uninstall: remove ${dnseen_cmd} and its services"
+  exit 1
+}
+
+# Uninstall
+
+uninstall() {
+  if [ -f "${systemd_dir}/${dnseen_cmd}.service" ]; then
+    echo "Stopping and disabling systemd ${dnseen_cmd}.service"
+    systemctl stop "${dnseen_cmd}.service"
+    systemctl disable "${dnseen_cmd}.service"
+
+    echo "Removing file ${systemd_dir}/${dnseen_cmd}.service"
+    rm -f "${systemd_dir}/${dnseen_cmd}.service"
+
+    echo "Restarting systemd daemon"
+    systemctl daemon-reload
+  fi
+
+  if [ -f "${logrotate_dir}/${dnseen_cmd}.logrotate" ]; then
+    echo "Removing ${logrotate_dir}/${dnseen_cmd}.logrotate"
+    rm -f "${logrotate_dir}/${dnseen_cmd}.logrotate"
+  fi
+
+  if [ -f "${install_dir}/${dnseen_cmd}" ]; then
+    echo "Removing ${install_dir}/${dnseen_cmd}"
+    rm -f "${install_dir}/${dnseen_cmd}"
+  fi
+
+  echo "Uninstall complete"
+  exit 0
 }
 
 # CLI opts parsing
 
 while [[ $# -gt 0 ]]
 do
-    opt="$1"
-    case "$opt" in
-        --install-dir)
-            install_dir="$2"
-            shift
-            shift
-            ;;
-        --download-dir)
-            download_dir="$2"
-            shift
-            shift
-            ;;
-        --version)
-            version="$2"
-            shift
-            shift
-            ;;
-        --checksum)
-            checksum="$2"
-            shift
-            shift
-            ;;
-        *)
-            show_help
-            shift
-            ;;
-    esac
+  opt="$1"
+  case "$opt" in
+    --install-dir)
+      install_dir="$2"
+      shift
+      shift
+      ;;
+    --download-dir)
+      download_dir="$2"
+      shift
+      shift
+      ;;
+    --version)
+      version="$2"
+      shift
+      shift
+      ;;
+    --checksum)
+      checksum="$2"
+      shift
+      shift
+      ;;
+    --uninstall)
+      uninstall
+      shift
+      shift
+      ;;
+    *)
+      show_help
+      shift
+      ;;
+  esac
 done
+
 
 # CLI opts set up & validation
 
 if ! command -v tcpdump >/dev/null; then
-    echo "tcpdump not found. Install before proceeding with the ${dnseen_cmd} installation"
-    exit 1
+  echo "tcpdump not found. Install before proceeding with the ${dnseen_cmd} installation"
+  echo "See your distribution's documentation for the proper command to install `tcpdump` package"
+  exit 1
 elif ! command -v bb >/dev/null; then
-    echo "babashka not found. Install before proceeding with the ${dnseen_cmd} installation"
-    exit 1
+  echo "babashka not found. Install before proceeding with the ${dnseen_cmd} installation"
+  echo "See installation guide for babashka:"
+  echo "https://github.com/babashka/babashka#installation"
+  exit 1
 fi
 
 if [[ -z "$download_dir" ]]; then
-    download_dir=$( mktemp -d )
-    trap 'rm -rf "$download_dir"' EXIT
+  download_dir=$( mktemp -d )
+  trap 'rm -rf "$download_dir"' EXIT
 fi
 
 if [[ "$checksum" != "" ]] && [[ "$version" == "" ]]; then
-    >&2 echo "--checksum and --version must be used together"
-    exit 1
+  >&2 echo "--checksum and --version must be used together"
+  exit 1
 fi
 
 if [[ "$(uname -s)" != "Linux" ]]; then
-    >&2 echo "Only Linux OS is supported"
-    exit 1
+  >&2 echo "Only Linux OS is supported"
+  exit 1
 fi
 
 # Download file
@@ -107,32 +148,32 @@ extracted_dir="${dnseen_cmd}-${version}"
 download_url="https://github.com/pilosus/dnseen/archive/refs/tags/${filename}"
 
 mkdir -p "$download_dir" && (
-    cd "$download_dir"
-    echo -e "Downloading $download_url to $download_dir"
+  cd "$download_dir"
+  echo -e "Downloading $download_url to $download_dir"
 
-    curl -o "$filename" -sL "$download_url"
-    if [[ -n "$checksum" ]]; then
-        if ! echo "$checksum *$filename" | $checksum_cmd --check --status; then
-            >&2 echo "Failed checksum on $filename"
-            >&2 echo "Got: $( $checksum_cmd "$filename" | cut -d' ' -f1 )"
-            >&2 echo "Expected: $checksum"
-            exit 1
-        fi
+  curl -o "$filename" -sL "$download_url"
+  if [[ -n "$checksum" ]]; then
+    if ! echo "$checksum *$filename" | $checksum_cmd --check --status; then
+      >&2 echo "Failed checksum on $filename"
+      >&2 echo "Got: $( $checksum_cmd "$filename" | cut -d' ' -f1 )"
+      >&2 echo "Expected: $checksum"
+      exit 1
     fi
-    $unarchive_cmd "$filename"
-    rm -f "$filename"
+  fi
+  $unarchive_cmd "$filename"
+  rm -f "$filename"
 )
 
 # Install analyzer
 
 if [[ "$download_dir" != "$install_dir" ]]
 then
-    mkdir -p "$install_dir"
-    if [ -f "${install_dir}/${dnseen_cmd}" ]; then
-        echo "Moving ${install_dir}/${dnseen_cmd} to ${install_dir}/${dnseen_cmd}.old"
-        mv -f "${install_dir}/${dnseen_cmd}" "${install_dir}/${dnseen_cmd}.old"
-    fi
-    mv -f "${download_dir}/${extracted_dir}/${dnseen_cmd}" "${install_dir}/${dnseen_cmd}"
+  mkdir -p "$install_dir"
+  if [ -f "${install_dir}/${dnseen_cmd}" ]; then
+    echo "Moving ${install_dir}/${dnseen_cmd} to ${install_dir}/${dnseen_cmd}.old"
+    mv -f "${install_dir}/${dnseen_cmd}" "${install_dir}/${dnseen_cmd}.old"
+  fi
+  mv -f "${download_dir}/${extracted_dir}/${dnseen_cmd}" "${install_dir}/${dnseen_cmd}"
 fi
 echo "Successfully installed ${dnseen_cmd} in ${install_dir}"
 
@@ -153,9 +194,18 @@ restorecon "${systemd_dir}/${dnseen_cmd}.service"
 systemctl daemon-reload
 systemctl start "${dnseen_cmd}.service"
 systemctl enable "${dnseen_cmd}.service"
-echo "Successfully enabled systemd service ${systemd_dir}/${dnseen_cmd}.service"
+echo "Successfully enabled and started ${systemd_dir}/${dnseen_cmd}.service"
         
 # Install logrotate
+# Logrotate is optional, add config only if the command is available
 
-mv -f "${download_dir}/${extracted_dir}/${dnseen_cmd}.logrotate" "${logrotate_dir}/${dnseen_cmd}.logrotate"
-echo "Successfully added logrotate config ${logrotate_dir}/${dnseen_cmd}.logrotate"
+if command -v logrotate >/dev/null; then
+  mv -f "${download_dir}/${extracted_dir}/${dnseen_cmd}.logrotate" "${logrotate_dir}/${dnseen_cmd}.logrotate"
+  echo "Successfully added ${logrotate_dir}/${dnseen_cmd}.logrotate"
+else
+  echo "logrotate not found, skip adding logrotate config"
+fi
+
+echo "Install complete"
+exit 0
+

@@ -11,6 +11,7 @@
   filter by domain hits, etc.
 
 ```
+$ dnseen
 |                             :domain | :hits |
 |-------------------------------------+-------|
 |                      api.github.com |     3 |
@@ -23,22 +24,64 @@
 |           lh5.googleusercontent.com |     2 |
 | optimizationguide-pa.googleapis.com |     2 |
 |         safebrowsing.googleapis.com |     2 |
-Query options:
-{:exclude "(?i).*(dnsleaktest|archive\\.is)",
- :head "10",
- :from "2023-12-28T18:40",
- :to "2023-12-28T18:50",
- :hits "2"}
 ```
 
 ## Install
 
+### Dependencies
+
+`dnseen` requires the following dependencies:
+
+- Linux OS
+- `tcpdump`
+- [babashka](https://github.com/babashka/babashka#installation)
+- (optionally) `logrotate`
+
+
 ### Installer script
+
+Install `dnseen` with the installer script on Linux:
 
 ```shell
 curl -sLO https://raw.githubusercontent.com/pilosus/dnseen/master/install
 chmod +x install
-sudo ./install
+./install
+```
+
+By default, the command will be installed in `/usr/local/bin` (you may
+need to use `sudo` to run the installer script in this case!). You can
+change installation directory with the option `--install-dir`:
+
+```shell
+./install --install-dir <your-dir-under-$PATH>
+```
+
+To install a specific version instead of the latest one use
+`--version` option:
+
+```shell
+./install --version 0.2.0
+```
+
+Installer script downloads a package archive file to a temporary
+directory under `/tmp`, you can change it with the option
+`--download-dir`:
+
+```shell
+./install --download-dir <your-dir-under-$PATH>
+```
+
+You can uninstall `dnseen` and all its corresponding services with the
+`--uninstall` option (can be used along with `--install-dir`):
+
+```shell
+./install --uninstall
+```
+
+For more options see installer script's help:
+
+```shell
+./install --help
 ```
 
 ### Manual install
@@ -50,13 +93,7 @@ git clone https://github.com/pilosus/dnseen.git
 cd dnseen
 ```
 
-2. Install dependencies:
-
-- `tcpdump`
-- [babashka](https://github.com/babashka/babashka#installation)
-- (optionally) `logrotate`
-
-3. Copy content of the `dnseen.service` file and paste to a new
+2. Copy content of the `dnseen.service` file and paste to a new
    `systemd` service:
 
 ```shell
@@ -69,7 +106,7 @@ Alternatively, simply copy the service file:
 sudo cp dnseen.service /etc/systemd/system/
 ```
 
-4. Reload `systemd`, start the service, enable it to start
+3. Reload `systemd`, start the service, enable it to start
    automatically on system boot, and make sure it works:
 
 ```shell
@@ -79,7 +116,7 @@ sudo systemctl enable dnseen.service
 sudo systemctl status dnseen.service 
 ```
 
-5. (Optionally) Add `logrotate` config file to make logs rotated:
+4. (Optionally) Add `logrotate` config file to make logs rotated:
 
 ```shell
 sudo cp dnseen.logrotate /etc/logrotate.d/dnseen
@@ -97,6 +134,7 @@ If needed, force rotation and restart the service:
 sudo logrotate --force /etc/logrotate.d/dnseen
 sudo systemctl restart dnseen.service
 ```
+
 
 ## Use
 
