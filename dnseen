@@ -41,11 +41,14 @@
    :verbose {:desc "Verbosity. Multiple flags combine"
              :alias :v
              :coerce []}
+   :pretty {:desc "Pretty print a report in tabular format; use --no-pretty for plain text"
+            :default true}
    :help {:desc "Print help message"
           :alias :h
           :coerce :boolean}})
 
-(def opts-ordered [:from :to :match :exclude :hits :head :help])
+;; NB! Extend the vector when a new option is added to the `cli-spec`
+(def opts-ordered [:from :to :match :exclude :hits :head :pretty :help])
 
 ;; Process logs
 
@@ -153,19 +156,30 @@
   (let [query (opts->str opts)
         verbosity (count (:verbose opts))]
     (when (>= verbosity 1)
-      (println "Query params:")
+      (println)
+      (println :params)
       (p/pprint query))))
+
+(defn- keywordize-stats
+  [stats]
+  (reduce
+   (fn [acc [domain hits]]
+     (conj acc {:domain domain :hits hits})) [] stats))
+
+(defn- stringify-stats
+  [stats]
+  (->>
+   stats
+   (map (fn [[domain hits]] (format "%s %s" domain hits)))
+   (str/join "\n")))
 
 (defn out-report!
   "Print stats report to the standard output" 
-  [stats]
-  (let [{:keys [stats opts]} stats
-        report (->> stats
-                    (reduce 
-                     (fn [acc [domain hits]] 
-                       (conj acc {:domain domain :hits hits})) []))]
-    (p/print-table report)
-    (out-opts! opts)))
+  [report]
+  (let [{:keys [stats opts]} report]
+    (if (:pretty opts)
+      (p/print-table (keywordize-stats stats))
+      (println (stringify-stats stats)))))
 
 ;; CLI options
 
@@ -189,8 +203,8 @@
       (out-help!)
       (let [logs (parse-logs)
             opts (enrich-opts opts logs)]
-        (out-report! (->> logs
-                          (stats-report opts)))))))
+        (out-report! (stats-report opts logs))
+        (out-opts! opts)))))
 
 (when (= *file* (System/getProperty "babashka.file"))
   (exec!))
