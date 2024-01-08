@@ -8,6 +8,18 @@ file. This change log follows the conventions of
 
 Nothing here yet.
 
+## [v0.3.0] - 2024-01-08
+
+### Added
+- `--hosts` option that takes a path to the hosts file or a directory
+  and finds domains blocked. The option is cumulative, i.e. one can
+  pass in more than one hosts file/directory
+  ([#13](https://github.com/pilosus/dnseen/issues/13))
+- `--totals` flag to show aggregation statistics of the report: total
+  raw logs, number of filtered queries, number of blocked queries and
+  their share, etc
+  ([#15](https://github.com/pilosus/dnseen/issues/15))
+
 ## [v0.2.1] - 2023-12-29
 ### Fixed
 - Installer script's `--uninstall` option can be invoked in any order
@@ -39,7 +51,8 @@ Nothing here yet.
 - `systemd` service file
 - `logrotate` config file
 
-[Unreleased]: https://github.com/pilosus/dnseen/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/pilosus/dnseen/compare/v0.3.0...HEAD
+[v0.3.0]: https://github.com/pilosus/dnseen/compare/v0.2.1...v0.3.0
 [v0.2.1]: https://github.com/pilosus/dnseen/compare/v0.2.0...v0.2.1
 [v0.2.0]: https://github.com/pilosus/dnseen/compare/v0.1.0...v0.2.0
 [v0.1.0]: https://github.com/pilosus/dnseen/compare/v0.0.0...v0.1.0

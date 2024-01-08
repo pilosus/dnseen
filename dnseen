@@ -18,7 +18,7 @@
 (def logfile "/var/log/dnseen.log")
 
 (def cli-spec
-  {:hosts {:desc "Hosts file/directory path. If path is a directory, recursivelly find all the files under the path"
+  {:hosts {:desc "Hosts file path. If path is a directory, recursivelly find all the files under the path. More than one hosts option can be passed in"
            :coerce []
            :default ["/etc/hosts"]}
    :from {:desc "Start timestamp (inclusive) in ISO-8601 LocalDateTime format to filter logs. Defaults to the first log entry's timestamp. Example: '1970-01-01T00:00:00'"
@@ -48,12 +48,14 @@
              :coerce []}
    :pretty {:desc "Pretty print a report in tabular format; use --no-pretty for plain text"
             :default true}
+   :totals {:desc "Show totals stats. :raw-logs - number of log items parsed from the logfile; :block-list - number of domains to be resolved to localhost or 0.0.0.0 from the hosts files provided (blocking); :queries - number of domain hits after filters applied; :blocked - number of blocked queries; :blocked-share - percentage of blocked queries. Use --no-total to suppress totals"
+            :default false}
    :help {:desc "Print help message"
           :alias :h
           :coerce :boolean}})
 
 ;; NB! Extend the vector when a new option is added to the `cli-spec`
-(def opts-ordered [:from :to :match :exclude :hits :head :pretty :help])
+(def opts-ordered [:hosts :from :to :match :exclude :hits :head :pretty :totals :help])
 
 ;; Process hosts file
 
@@ -176,7 +178,7 @@
      :to (or to end)
      :head (or head logs-total)
      :hits (or hits 0)
-     :total logs-total)))
+     :logs logs-total)))
 
 (defn filter-logs
   "Apply filters to the logs before aggregating"
@@ -196,6 +198,27 @@
        (filter (fn [[_ hits]] (>= hits (:hits opts))))
        (take (:head opts))))
 
+(defn stats-totals
+  [opts stats hosts]
+  (let [totals (reduce
+                (fn [acc val]
+                  (let [[_ hits blocked?] val
+                        blocked (if blocked? hits 0)]
+                    (-> acc
+                        (update :queries + hits)
+                        (update :blocked + blocked))))
+                {:raw-logs (:logs opts)
+                 :block-list (count hosts)
+                 :queries 0
+                 :blocked 0}
+                stats)
+        blocked-share (format "%.2f%s"
+                              (float (/ (* (:blocked totals) 100)
+                                        (:queries totals)))
+                              "%")
+        result (assoc totals :blocked-share blocked-share)]
+    result))
+
 (defn stats-report
   "Return a start report with a top-list of domain hits in desc order"
   [opts logs hosts]
@@ -208,8 +231,10 @@
                           [domain freq (contains? hosts domain)]))
                    reverse
                    (filter-stats opts)
-                   (into []))]
+                   (into []))
+        totals (stats-totals opts stats hosts)]
     {:stats stats
+     :totals totals
      :opts opts}))
 
 ;; Representation
@@ -231,13 +256,15 @@
 
 (defn out-opts!
   "Print query options used"
-  [opts]
-  (let [query (opts->str opts)
+  [report]
+  (let [opts (:opts report)
+        query (opts->str opts)
         verbosity (count (:verbose opts))]
     (when (>= verbosity 1)
       (println)
       (println :params)
-      (p/pprint query))))
+      (p/pprint query))
+    report))
 
 (defn- keywordize-stats
   [stats]
@@ -258,7 +285,18 @@
   (let [{:keys [stats opts]} report]
     (if (:pretty opts)
       (p/print-table (keywordize-stats stats))
-      (println (stringify-stats stats)))))
+      (println (stringify-stats stats)))
+    report))
+
+(defn out-totals!
+  "Print totals"
+  [report]
+  (let [totals (opts->str (:totals report))]
+    (when (get-in report [:opts :totals])
+      (println)
+      (println :totals)
+      (p/pprint totals))
+    report))
 
 ;; CLI options
 
@@ -283,8 +321,11 @@
       (let [logs (parse-logs)
             opts (enrich-opts opts logs)
             hosts (parse-hosts opts)]
-        (out-report! (stats-report opts logs hosts))
-        (out-opts! opts)))))
+        (-> opts
+            (stats-report logs hosts)
+            out-report!
+            out-totals!
+            out-opts!)))))
 
 (when (= *file* (System/getProperty "babashka.file"))
   (exec!))

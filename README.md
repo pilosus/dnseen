@@ -169,6 +169,20 @@ dnseen \
     -vvv
 ```
 
+A path to a file or a directory containing [hosts
+file](https://man7.org/linux/man-pages/man5/hosts.5.html) can be
+provided to get statistics about blocked domains, i.e. domains that
+resolve to either [localhost](https://en.wikipedia.org/wiki/Localhost)
+or [0.0.0.0](https://en.wikipedia.org/wiki/0.0.0.0). Use `--totals`
+flag to get aggregation statistics of the report itself:
+
+```shell
+dnseen \
+    --hosts '/etc/hosts.d/' \
+    --hosts '/etc/hosts.old' \
+    --totals
+```
+
 Find more options in help:
 
 ```shell
