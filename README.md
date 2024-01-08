@@ -162,6 +162,7 @@ dnseen \
     --to "2024-01-01T00:00:00" \
     --match '\.(goog|google)$' \
     --exclude '(?i).*domains\.' \
+    --hosts '/etc/hosts' \
     --hits 10 \
     --head 20 \
     --no-pretty \
