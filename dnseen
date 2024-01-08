@@ -2,9 +2,11 @@
 
 (ns dnseen
   (:require
+   [clojure.set :refer [union]]
    [clojure.string :as str]
    [clojure.pprint :as p]
-   [babashka.cli :as cli]))
+   [babashka.cli :as cli]
+   [babashka.fs :as fs]))
 
 ;; CLI opts parsing helpers
 
@@ -16,13 +18,16 @@
 (def logfile "/var/log/dnseen.log")
 
 (def cli-spec
-  {:from {:desc "Start timestamp (inclusive) in ISO-8601 LocalDateTime format to filter logs. Defaults to the first log entry's timestamp. Example: '1970-01-01T00:00:00'"
+  {:hosts {:desc "Hosts file/directory path. If path is a directory, recursivelly find all the files under the path"
+           :coerce []
+           :default ["/etc/hosts"]}
+   :from {:desc "Start timestamp (inclusive) in ISO-8601 LocalDateTime format to filter logs. Defaults to the first log entry's timestamp. Example: '1970-01-01T00:00:00'"
           :alias :f
-          :default nil 
+          :default nil
           :coerce str->dt}
    :to {:desc "End timestamp (inclusive) in ISO-8601 LocalDateTime format to filter logs. Defaults to the last log entry's timestamp. Example: '2023-12-31T23:59:59.999'"
         :alias :t
-        :default nil 
+        :default nil
         :coerce str->dt}
    :match {:desc "Perl-compatible regular expression to match domain names from the logs. Example: '(google|goog)$'"
            :alias :m
@@ -50,9 +55,76 @@
 ;; NB! Extend the vector when a new option is added to the `cli-spec`
 (def opts-ordered [:from :to :match :exclude :hits :head :pretty :help])
 
+;; Process hosts file
+
+(defn parse-hosts-line
+  [line]
+  (let [[ip canonical & _]
+        (-> line
+            (str/replace #"#.*$" "")
+            str/trim
+            (str/split #"\s+"))]
+    (if canonical
+      [ip canonical]
+      [nil nil])))
+
+(defn localhost?
+  "Return true if given IP address is a loopback, localhost or 0.0.0.0"
+  [ip]
+  (cond
+    (= ip "0.0.0.0") true
+    (= ip "127.0.0.1") true
+    (= ip "::") true
+    (= ip "::1") true
+    (= ip "0:0:0:0:0:0:0:0") true
+    (= ip "0:0:0:0:0:0:0:1") true
+    (= ip "0000:0000:0000:0000:0000:0000:0000:0000") true
+    (= ip "0000:0000:0000:0000:0000:0000:0000:0001") true
+    :else false))
+
+(defn hosts-file->blocked
+  "Parse given hosts file into a set of blocked hostnames.
+  Hostname is considered blocked if it's resolved to localhost."
+  [hosts-file]
+  (let [hosts (->> hosts-file
+                   slurp
+                   str/split-lines)
+        result (reduce
+                (fn [acc line]
+                  (let [[ip canonical] (parse-hosts-line line)]
+                    (if (localhost? ip)
+                      (conj acc canonical)
+                      acc)))
+                #{} hosts)]
+    result))
+
+(defn parse-hosts-path
+  "Parse all the hosts files under the given path and return a set of
+  blocked hostnames"
+  [path]
+  (let [path-expanded (fs/expand-home path)
+        paths (if (fs/regular-file? path-expanded)
+                [path-expanded]
+                (fs/glob path-expanded "**"))
+        files (filter fs/regular-file? paths)
+        hosts (reduce
+               (fn [acc file]
+                 (union acc (-> file
+                                str
+                                hosts-file->blocked)))
+               #{} files)]
+    hosts))
+
+(defn parse-hosts
+  [opts]
+  (reduce
+   (fn [acc path]
+     (union acc (parse-hosts-path path)))
+   #{} (:hosts opts)))
+
 ;; Process logs
 
-(defn split-cols 
+(defn split-cols
   [s]
   (str/split s #"\s+"))
 
@@ -71,7 +143,7 @@
 (defn dt-in-range?
   "Return true if the given timestamp is in the range [from, to]"
   [from to [dt _]]
-  (and 
+  (and
    (or (.isAfter dt from) (.isEqual dt from))
    (or (.isBefore dt to) (.isEqual dt to))))
 
@@ -98,9 +170,9 @@
   (let [{:keys [start end]} (logs-dt-range logs)
         {:keys [from to head hits]} opts
         logs-total (count logs)]
-    (assoc 
-     opts 
-     :from (or from start) 
+    (assoc
+     opts
+     :from (or from start)
      :to (or to end)
      :head (or head logs-total)
      :hits (or hits 0)
@@ -126,12 +198,14 @@
 
 (defn stats-report
   "Return a start report with a top-list of domain hits in desc order"
-  [opts logs]
+  [opts logs hosts]
   (let [stats (->> logs
                    (filter-logs opts)
                    (map second)
                    frequencies
                    (sort-by second)
+                   (map (fn [[domain freq]]
+                          [domain freq (contains? hosts domain)]))
                    reverse
                    (filter-stats opts)
                    (into []))]
@@ -143,10 +217,15 @@
 (defn opts->str
   "Format non-nil opts as strings"
   [opts]
-  (let [opts (->> 
+  (let [opts (->>
               opts
               (remove (fn [[_ v]] (nil? v)))
-              (map (fn [[k v]] [k (str v)]))
+              (map (fn [[k v]]
+                     (cond
+                       (number? v) [k v]
+                       (boolean? v) [k v]
+                       (coll? v) [k (str/join "," v)]
+                       :else [k (str v)])))
               (into {}))]
      opts))
 
@@ -163,18 +242,18 @@
 (defn- keywordize-stats
   [stats]
   (reduce
-   (fn [acc [domain hits]]
-     (conj acc {:domain domain :hits hits})) [] stats))
+   (fn [acc [domain hits blocked]]
+     (conj acc {:domain domain :hits hits :blocked blocked})) [] stats))
 
 (defn- stringify-stats
   [stats]
   (->>
    stats
-   (map (fn [[domain hits]] (format "%s %s" domain hits)))
+   (map (fn [[domain hits blocked]] (format "%s %s %s" domain hits blocked)))
    (str/join "\n")))
 
 (defn out-report!
-  "Print stats report to the standard output" 
+  "Print stats report to the standard output"
   [report]
   (let [{:keys [stats opts]} report]
     (if (:pretty opts)
@@ -202,8 +281,9 @@
     (if (:help opts)
       (out-help!)
       (let [logs (parse-logs)
-            opts (enrich-opts opts logs)]
-        (out-report! (stats-report opts logs))
+            opts (enrich-opts opts logs)
+            hosts (parse-hosts opts)]
+        (out-report! (stats-report opts logs hosts))
         (out-opts! opts)))))
 
 (when (= *file* (System/getProperty "babashka.file"))
