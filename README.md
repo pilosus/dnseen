@@ -12,18 +12,18 @@
 
 ```
 $ dnseen
-|                                     :domain | :hits |
-|---------------------------------------------+-------|
-|                                  github.com |    87 |
-|                              api.github.com |    83 |
-|                           fedoraproject.org |    80 |
-|                profile.accounts.firefox.com |    60 |
-|                 safebrowsing.googleapis.com |    37 |
-|                        collector.github.com |    36 |
-|                            alive.github.com |    32 |
-|                contile.services.mozilla.com |    27 |
-| sync-1-us-west1-g.sync.services.mozilla.com |    22 |
-|                               ocsp.pki.goog |    21 |
+|                             :domain | :hits | :blocked |
+|-------------------------------------+-------+----------|
+|        profile.accounts.firefox.com |   831 |    false |
+|                          github.com |   531 |    false |
+|                      www.google.com |   351 |    false |
+|                    alive.github.com |   332 |    false |
+|                      api.github.com |   331 |    false |
+|                     www.youtube.com |   326 |    false |
+|                           slack.com |   260 |    false |
+|                       app.slack.com |   246 |    false |
+|                          slackb.com |   232 |    false |
+|                clojurians.slack.com |   230 |    false |
 ...
 ```
 
