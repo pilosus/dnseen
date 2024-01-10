@@ -8,6 +8,14 @@ file. This change log follows the conventions of
 
 Nothing here yet.
 
+## [v0.4.0] - 2024-01-10
+### Added
+- `--config` option that takes a path to the config file in the
+  [EDN](https://github.com/edn-format/edn) format. Defaults to either
+  `$XDG_CONFIG_HOME/dnseen/config.edn` or
+  `$HOME/.config/dnseen/config.edn`
+  ([#5](https://github.com/pilosus/dnseen/issues/5))
+
 ## [v0.3.0] - 2024-01-08
 
 ### Added
@@ -51,7 +59,8 @@ Nothing here yet.
 - `systemd` service file
 - `logrotate` config file
 
-[Unreleased]: https://github.com/pilosus/dnseen/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/pilosus/dnseen/compare/v0.4.0...HEAD
+[v0.4.0]: https://github.com/pilosus/dnseen/compare/v0.3.0...v0.4.0
 [v0.3.0]: https://github.com/pilosus/dnseen/compare/v0.2.1...v0.3.0
 [v0.2.1]: https://github.com/pilosus/dnseen/compare/v0.2.0...v0.2.1
 [v0.2.0]: https://github.com/pilosus/dnseen/compare/v0.1.0...v0.2.0

@@ -183,7 +183,17 @@ dnseen \
     --totals
 ```
 
-Find more options in help:
+Configuration parameters can also be defined in a
+[EDN](https://github.com/edn-format/edn) config file. A default path
+to the config file is either `$XDG_CONFIG_HOME/dnseen/config.edn` or
+`$HOME/.config/dnseen/config.edn`. It can be overriden with the
+`--config` option:
+
+```shell
+dnseen --config ~/.dnseen
+```
+
+Get more help with:
 
 ```shell
 dnseen --help
