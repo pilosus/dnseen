@@ -2,25 +2,51 @@
 
 (ns dnseen
   (:require
+   [clojure.edn :refer [read-string]]
    [clojure.set :refer [union]]
    [clojure.string :as str]
    [clojure.pprint :as p]
    [babashka.cli :as cli]
    [babashka.fs :as fs]))
 
-;; CLI opts parsing helpers
+;; Config parameters parsing helpers
 
 (defn str->dt [s] (java.time.LocalDateTime/parse s))
 (defn str->regex [s] (re-pattern s))
 
-;; Const
+(def log-file "/var/log/dnseen.log")
+(def config-file "config.edn")
 
-(def logfile "/var/log/dnseen.log")
+(defn config-file-default
+  "Return a path to the default config file"
+  []
+  (let [config-dir (fs/xdg-config-home "dnseen")]
+    (fs/path config-dir config-file)))
 
+(defn load-config-file
+  "Return a map with config loaded from the edn config file"
+  [p]
+  (let [path (fs/expand-home p)]
+    (when (and (fs/exists? path)
+               (fs/regular-file? path))
+      (try (-> path
+               str
+               slurp
+               read-string)
+           (catch java.lang.IllegalArgumentException e
+             (print (.getMessage e))
+             nil)))))
+
+(defn remove-nil-vals
+  "Remove key-values pairs from the given map where value is nil"
+  [m]
+  (into {} (remove (fn [[_ v]] (nil? v)) m)))
+
+;; NB! defaults are not provided as they are defined in the `settings` fn below.
+;; This is to ensure configuration parameters are applied in the correct order.
 (def cli-spec
-  {:hosts {:desc "Hosts file path. If path is a directory, recursivelly find all the files under the path. More than one hosts option can be passed in"
-           :coerce []
-           :default ["/etc/hosts"]}
+  {:hosts {:desc "Hosts file path. If path is a directory, recursivelly find all the files under the path. Defaults to /etc/hosts. More than one hosts option can be passed in."
+           :coerce []}
    :from {:desc "Start timestamp (inclusive) in ISO-8601 LocalDateTime format to filter logs. Defaults to the first log entry's timestamp. Example: '1970-01-01T00:00:00'"
           :alias :f
           :default nil
@@ -37,25 +63,32 @@
              :alias :e
              :default nil
              :coerce str->regex}
-   :hits {:desc "Output domains with the given number of hits or above"
+   :hits {:desc "Output domains with the given number of hits or above."
           :default nil
           :coerce :int}
-   :head {:desc "Output the first N domains. Applied as the last filter to the report"
+   :head {:desc "Output the first N domains. Applied as the last filter to the report."
           :default nil
           :coerce :int}
    :verbose {:desc "Verbosity. Multiple flags combine"
              :alias :v
              :coerce []}
-   :pretty {:desc "Pretty print a report in tabular format; use --no-pretty for plain text"
-            :default true}
-   :totals {:desc "Show totals stats. :raw-logs - number of log items parsed from the logfile; :block-list - number of domains to be resolved to localhost or 0.0.0.0 from the hosts files provided (blocking); :queries - number of domain hits after filters applied; :blocked - number of blocked queries; :blocked-share - percentage of blocked queries. Use --no-total to suppress totals"
-            :default false}
+   :pretty {:desc "Pretty print a report in tabular format. Defaults to true. Use --no-pretty for plain text."
+            :default nil}
+   :totals {:desc "Show totals stats. :raw-logs - number of log items parsed from the log-file; :block-list - number of domains to be resolved to localhost or 0.0.0.0 from the hosts files provided (blocking); :queries - number of domain hits after filters applied; :blocked - number of blocked queries; :blocked-share - percentage of blocked queries. Use --no-total to suppress totals. Defaults to false."
+            :default nil}
+   :config {:desc "A path to the config file in EDN format. Keys are defined as CLI options prefixed with `:`, e.g. :hosts, :totals, :verbose, etc. Defaults to /dnseen/config.edn either under $XDG_CONFIG_HOME/ if set or under $HOME/.config/"
+            :alias :c
+            ;; Path to config cannot be overriden from the config file,
+            ;; so keep the defaults here
+            :default (config-file-default)}
    :help {:desc "Print help message"
           :alias :h
           :coerce :boolean}})
 
 ;; NB! Extend the vector when a new option is added to the `cli-spec`
-(def opts-ordered [:hosts :from :to :match :exclude :hits :head :pretty :totals :help])
+(def opts-ordered
+  [:hosts :from :to :match :exclude :hits :head :pretty :totals
+   :config :help])
 
 ;; Process hosts file
 
@@ -150,9 +183,9 @@
    (or (.isBefore dt to) (.isEqual dt to))))
 
 (defn parse-logs
-  "Parse logfile into a sequence of [timestamp domain] vectors"
+  "Parse log-file into a sequence of [timestamp domain] vectors"
   []
-  (->> logfile
+  (->> log-file
        slurp
        str/split-lines
        (map split-cols)
@@ -166,19 +199,35 @@
         end (->> logs last first)]
     {:start start :end end}))
 
-(defn enrich-opts
-  "Update opts with sensible defaults"
-  [opts logs]
+(defn settings
+  "Take CLI opts, config file and defaults and return the settings
+
+  Configuration parameters are applied in order of precedence, from
+  highest to lowest:
+  - CLI options
+  - User-level configuration (e.g. ~/HOME/.config/dnseen/config.edn)
+  - System default configuration
+
+  See details:
+  https://clig.dev/#configuration"
+  [logs opts config]
   (let [{:keys [start end]} (logs-dt-range logs)
-        {:keys [from to head hits]} opts
-        logs-total (count logs)]
-    (assoc
-     opts
-     :from (or from start)
-     :to (or to end)
-     :head (or head logs-total)
-     :hits (or hits 0)
-     :logs logs-total)))
+        logs-total (count logs)
+        defaults {:hosts ["/etc/hosts"]
+                  :from start
+                  :to end
+                  :match nil
+                  :exclude nil
+                  :hits 0
+                  :head logs-total
+                  :pretty true
+                  :totals false
+                  :config nil  ;; defined in cli-spec defaults
+                  :logs logs-total}]
+    (merge
+     (remove-nil-vals defaults)
+     (remove-nil-vals config)
+     (remove-nil-vals opts))))
 
 (defn filter-logs
   "Apply filters to the logs before aggregating"
@@ -319,7 +368,8 @@
     (if (:help opts)
       (out-help!)
       (let [logs (parse-logs)
-            opts (enrich-opts opts logs)
+            config (load-config-file (:config opts))
+            opts (settings logs opts config)
             hosts (parse-hosts opts)]
         (-> opts
             (stats-report logs hosts)
